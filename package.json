@@ -1,0 +1,21 @@
+{
+  "name": "@bp-templates/empty-integration",
+  "integrationName": "motus/orama",
+  "scripts": {
+    "check:type": "tsc --noEmit",
+    "version": "bp --version",
+    "login": "bp login",
+    "gen": "bp gen",
+    "deploy": "bp deploy"
+  },
+  "private": true,
+  "dependencies": {
+    "@botpress/client": "1.6.0",
+    "@botpress/sdk": "4.1.0",
+    "@oramacloud/client": "^2.1.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.6.3"
+  }
+}
