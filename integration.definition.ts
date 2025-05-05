@@ -3,15 +3,20 @@ import { integrationName } from './package.json'
 
 export default new IntegrationDefinition({
   name: integrationName,
-  version: '0.0.1',
+  version: '0.2.0', // Incrémentation de la version
   readme: 'hub.md',
   icon: 'icon.svg',
   
-  // Configuration schema for Orama integration
+  // Configuration schema for Orama integration with multiple indexes
   configuration: {
     schema: z.object({
-      endpoint: z.string().describe('Your Orama Cloud endpoint URL'),
-      api_key: z.string().describe('Your Orama Cloud API key'),
+      indexes: z.array(
+        z.object({
+          name: z.string().describe('A unique name for this index'),
+          endpoint: z.string().describe('The Orama Cloud endpoint URL for this index'),
+          api_key: z.string().describe('The Orama Cloud API key for this index')
+        })
+      ).min(1).describe('Configure one or more Orama indexes')
     })
   },
   
@@ -21,6 +26,7 @@ export default new IntegrationDefinition({
     search: {
       input: {
         schema: z.object({
+          indexName: z.string().describe('The name of the index to search'),
           term: z.string().describe('The search term to query'),
           mode: z.enum(['fulltext', 'vector', 'hybrid']).optional().describe('Search mode (fulltext, vector, or hybrid)'),
           properties: z.array(z.string()).optional().describe('Properties to search in'),
@@ -39,10 +45,11 @@ export default new IntegrationDefinition({
       }
     },
     
-    // Vector search - using same schema as search but with specialized description
+    // Vector search
     vectorSearch: {
       input: {
         schema: z.object({
+          indexName: z.string().describe('The name of the index to search'),
           term: z.string().describe('The search term to generate embeddings for vector search'),
           whereConditions: z.string().optional().describe('Filter conditions in JSON format (e.g., {"price":{"lt":100}})'),
           limit: z.number().optional().describe('Maximum number of results to return')
@@ -61,6 +68,7 @@ export default new IntegrationDefinition({
     searchWithFacets: {
       input: {
         schema: z.object({
+          indexName: z.string().describe('The name of the index to search'),
           term: z.string().describe('The search term to query'),
           mode: z.enum(['fulltext', 'vector', 'hybrid']).optional().describe('Search mode'),
           facetsConfig: z.string().describe('Facet configuration in JSON format (e.g., {"category":{"limit":5}})'),
@@ -78,27 +86,44 @@ export default new IntegrationDefinition({
       }
     },
     
-    // Multi-index search
+    // List available indexes
+    listIndexes: {
+      input: {
+        schema: z.object({})
+      },
+      output: {
+        schema: z.object({
+          indexes: z.array(z.object({
+            name: z.string().describe('Index name'),
+            endpoint: z.string().describe('Index endpoint')
+          })).describe('List of available indexes')
+        })
+      }
+    },
+    
+    // Multi-index search (search across multiple configured indexes)
     multiIndexSearch: {
       input: {
         schema: z.object({
+          indexNames: z.array(z.string()).describe('Names of the indexes to search'),
           term: z.string().describe('The search term to query'),
           mode: z.enum(['fulltext', 'vector', 'hybrid']).optional().describe('Search mode'),
           mergeResults: z.boolean().optional().describe('Whether to merge results from multiple indexes'),
-          additionalIndexes: z.array(
-            z.object({
-              endpoint: z.string().describe('Endpoint URL for additional index'),
-              api_key: z.string().describe('API key for additional index')
-            })
-          ).optional().describe('Additional indexes to search')
+          whereConditions: z.string().optional().describe('Filter conditions in JSON format (e.g., {"price":{"lt":100}})')
         })
       },
       output: {
         schema: z.object({
-          hits: z.array(z.any()).describe('Search results'),
-          count: z.number().describe('Total number of results'),
-          elapsed: z.number().describe('Time taken for search in milliseconds'),
-          isMerged: z.boolean().optional().describe('Whether results were merged from multiple indexes')
+          results: z.array(
+            z.object({
+              indexName: z.string().describe('Name of the index'),
+              hits: z.array(z.any()).describe('Search results for this index'),
+              count: z.number().describe('Number of results for this index'),
+              elapsed: z.number().describe('Time taken for search in milliseconds')
+            })
+          ).describe('Search results from all indexes'),
+          mergedHits: z.array(z.any()).optional().describe('Merged search results if mergeResults is true'),
+          totalCount: z.number().describe('Total number of results across all indexes')
         })
       }
     }

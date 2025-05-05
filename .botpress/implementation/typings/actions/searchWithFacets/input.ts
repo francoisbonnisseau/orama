@@ -3,6 +3,8 @@
 // This file is generated. Do not edit it manually.
 
 export type Input = {
+  /** The name of the index to search */
+  indexName: string;
   /** The search term to query */
   term: string;
   /** Search mode */

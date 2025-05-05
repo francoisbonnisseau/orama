@@ -3,12 +3,28 @@ import * as bp from '.botpress'
 import { OramaClient } from '@oramacloud/client'
 
 /**
- * Creates an instance of the Orama client with the provided configuration
+ * Interface representing an Orama index configuration
  */
-function createOramaClient(configuration: { endpoint: string; api_key: string }) {
+interface OramaIndexConfig {
+  name: string
+  endpoint: string
+  api_key: string
+}
+
+/**
+ * Gets an index configuration by its name
+ */
+function getIndexByName(configuration: { indexes: OramaIndexConfig[] }, indexName: string): OramaIndexConfig | undefined {
+  return configuration.indexes.find(index => index.name === indexName)
+}
+
+/**
+ * Creates an instance of the Orama client for a specific index
+ */
+function createOramaClientForIndex(indexConfig: OramaIndexConfig) {
   return new OramaClient({
-    endpoint: configuration.endpoint,
-    api_key: configuration.api_key,
+    endpoint: indexConfig.endpoint,
+    api_key: indexConfig.api_key,
   })
 }
 
@@ -29,14 +45,28 @@ function safeJsonParse(jsonString: string | undefined, logger: any): any | null 
 export default new bp.Integration({
   register: async ({ ctx, logger }) => {
     try {
-      // Create an Orama client with the provided configuration
-      const client = createOramaClient(ctx.configuration)
+      // Validate that at least one index is configured
+      if (!ctx.configuration.indexes || ctx.configuration.indexes.length === 0) {
+        throw new Error('No indexes configured')
+      }
       
-      // Simply validate configuration without actual search
-      logger.forBot().info('Orama integration registered successfully')
-    } catch (error) {
+      // Validate that each index has a name, endpoint, and API key
+      for (const index of ctx.configuration.indexes) {
+        if (!index.name || !index.endpoint || !index.api_key) {
+          throw new Error(`Index ${index.name || 'unnamed'} is missing required fields`)
+        }
+      }
+      
+      // Validate that index names are unique
+      const indexNames = ctx.configuration.indexes.map(index => index.name)
+      if (new Set(indexNames).size !== indexNames.length) {
+        throw new Error('Index names must be unique')
+      }
+      
+      logger.forBot().info(`Orama integration registered successfully with ${ctx.configuration.indexes.length} indexes`)
+    } catch (error:any) {
       logger.forBot().error('Failed to register Orama integration', error)
-      throw new sdk.RuntimeError('Invalid configuration: Failed to connect to Orama API')
+      throw new sdk.RuntimeError(`Invalid configuration: ${error.message}`)
     }
   },
   
@@ -46,9 +76,26 @@ export default new bp.Integration({
   },
   
   actions: {
+    // List all configured indexes
+    listIndexes: async ({ ctx }) => {
+      return {
+        indexes: ctx.configuration.indexes.map(index => ({
+          name: index.name,
+          endpoint: index.endpoint
+        }))
+      }
+    },
+    
     // General search action supporting full-text, vector, and hybrid search
     search: async ({ ctx, input, logger }) => {
-      const client = createOramaClient(ctx.configuration)
+      // Get the specified index configuration
+      const indexConfig = getIndexByName(ctx.configuration, input.indexName)
+      if (!indexConfig) {
+        throw new sdk.RuntimeError(`Index '${input.indexName}' not found`)
+      }
+      
+      // Create client for the specified index
+      const client = createOramaClientForIndex(indexConfig)
       
       try {
         // Create a clean search params object with only the necessary fields
@@ -78,7 +125,7 @@ export default new bp.Integration({
         }
         
         // Debug log the search parameters
-        //logger.forBot().debug('Orama search params:', JSON.stringify(searchParams))
+        logger.forBot().debug(`Orama search params for index '${input.indexName}':`, JSON.stringify(searchParams))
         
         const results = await client.search(searchParams)
         
@@ -89,7 +136,7 @@ export default new bp.Integration({
         }
       } catch (error:any) {
         // More detailed error logging to troubleshoot the issue
-        let errorMessage = `Error performing search: ${error.message || 'Unknown error'}`
+        let errorMessage = `Error performing search on index '${input.indexName}': ${error.message || 'Unknown error'}`
         
         // If there's an HTTP response in the error, try to get more information
         if (error.httpResponse) {
@@ -109,7 +156,14 @@ export default new bp.Integration({
     
     // Dedicated vector search action
     vectorSearch: async ({ ctx, input, logger }) => {
-      const client = createOramaClient(ctx.configuration)
+      // Get the specified index configuration
+      const indexConfig = getIndexByName(ctx.configuration, input.indexName)
+      if (!indexConfig) {
+        throw new sdk.RuntimeError(`Index '${input.indexName}' not found`)
+      }
+      
+      // Create client for the specified index
+      const client = createOramaClientForIndex(indexConfig)
       
       try {
         const searchParams: any = {
@@ -127,7 +181,7 @@ export default new bp.Integration({
         }
         
         // Debug log the search parameters
-        logger.forBot().debug('Orama vector search params:', JSON.stringify(searchParams))
+        logger.forBot().debug(`Orama vector search params for index '${input.indexName}':`, JSON.stringify(searchParams))
         
         const results = await client.search(searchParams)
         
@@ -138,7 +192,7 @@ export default new bp.Integration({
         }
       } catch (error:any) {
         // More detailed error logging to troubleshoot the issue
-        let errorMessage = `Error performing vector search: ${error.message || 'Unknown error'}`
+        let errorMessage = `Error performing vector search on index '${input.indexName}': ${error.message || 'Unknown error'}`
         
         // If there's an HTTP response in the error, try to get more information
         if (error.httpResponse) {
@@ -158,7 +212,14 @@ export default new bp.Integration({
     
     // Search with facets
     searchWithFacets: async ({ ctx, input, logger }) => {
-      const client = createOramaClient(ctx.configuration)
+      // Get the specified index configuration
+      const indexConfig = getIndexByName(ctx.configuration, input.indexName)
+      if (!indexConfig) {
+        throw new sdk.RuntimeError(`Index '${input.indexName}' not found`)
+      }
+      
+      // Create client for the specified index
+      const client = createOramaClientForIndex(indexConfig)
       
       try {
         const searchParams: any = {
@@ -184,7 +245,7 @@ export default new bp.Integration({
         }
         
         // Debug log the search parameters
-        logger.forBot().debug('Orama facets search params:', JSON.stringify(searchParams))
+        logger.forBot().debug(`Orama facets search params for index '${input.indexName}':`, JSON.stringify(searchParams))
         
         const results = await client.search(searchParams)
         
@@ -196,7 +257,7 @@ export default new bp.Integration({
         }
       } catch (error:any) {
         // More detailed error logging to troubleshoot the issue
-        let errorMessage = `Error performing search with facets: ${error.message || 'Unknown error'}`
+        let errorMessage = `Error performing search with facets on index '${input.indexName}': ${error.message || 'Unknown error'}`
         
         // If there's an HTTP response in the error, try to get more information
         if (error.httpResponse) {
@@ -217,23 +278,29 @@ export default new bp.Integration({
     // Multi-index search
     multiIndexSearch: async ({ ctx, input, logger }) => {
       try {
+        // Validate the specified index names and get their configurations
+        const indexConfigs: OramaIndexConfig[] = []
+        for (const indexName of input.indexNames) {
+          const indexConfig = getIndexByName(ctx.configuration, indexName)
+          if (!indexConfig) {
+            throw new sdk.RuntimeError(`Index '${indexName}' not found`)
+          }
+          indexConfigs.push(indexConfig)
+        }
+        
         // Create client options for multi-index search
         const clientOptions: any = {
           mergeResults: input.mergeResults === true,  // Ensure boolean
-        }
-        
-        // Only add indexes if additionalIndexes exists and has items
-        if (input.additionalIndexes && Array.isArray(input.additionalIndexes) && input.additionalIndexes.length > 0) {
-          clientOptions.indexes = [
-            { endpoint: ctx.configuration.endpoint, api_key: ctx.configuration.api_key },
-            ...input.additionalIndexes
-          ]
+          indexes: indexConfigs.map(config => ({
+            endpoint: config.endpoint,
+            api_key: config.api_key
+          }))
         }
         
         // Debug log the client options
         logger.forBot().debug('Orama multi-index client options:', JSON.stringify({
-          ...clientOptions,
-          indexes: clientOptions.indexes ? `${clientOptions.indexes.length} indexes` : 'no indexes'
+          mergeResults: clientOptions.mergeResults,
+          indexes: `${clientOptions.indexes.length} indexes`
         }))
         
         const client = new OramaClient(clientOptions)
@@ -245,17 +312,45 @@ export default new bp.Integration({
         // Only add mode if defined
         if (input.mode) searchParams.mode = input.mode
         
+        // Parse whereConditions from JSON string if provided
+        const whereObject = safeJsonParse(input.whereConditions, logger)
+        if (whereObject) {
+          searchParams.where = whereObject
+        }
+        
         // Debug log the search parameters
         logger.forBot().debug('Orama multi-index search params:', JSON.stringify(searchParams))
         
         const results = await client.search(searchParams)
         
-        // Format the response according to our updated schema
-        return {
-          hits: Array.isArray(results) ? results[0]?.hits || [] : results.hits || [],
-          count: Array.isArray(results) ? results[0]?.count || 0 : results.count || 0,
-          elapsed: Array.isArray(results) ? Number(results[0]?.elapsed) || 0 : Number(results.elapsed) || 0,
-          isMerged: input.mergeResults === true
+        // Process the results based on whether they're merged or not
+        if (input.mergeResults === true) {
+          // If results are merged, they will be a single object
+          return {
+            results: [{
+              indexName: 'merged',
+              hits: results.hits || [],
+              count: results.count || 0,
+              elapsed: Number(results.elapsed) || 0
+            }],
+            mergedHits: results.hits || [],
+            totalCount: results.count || 0
+          }
+        } else {
+          // If results are not merged, they will be an array of objects
+          const processedResults = Array.isArray(results) ? results.map((result, index) => ({
+            indexName: input.indexNames[index] || `index-${index}`,
+            hits: result.hits || [],
+            count: result.count || 0,
+            elapsed: Number(result.elapsed) || 0
+          })) : []
+          
+          const totalCount = processedResults.reduce((total, result) => total + result.count, 0)
+          
+          return {
+            results: processedResults,
+            totalCount
+          }
         }
       } catch (error:any) {
         // More detailed error logging to troubleshoot the issue

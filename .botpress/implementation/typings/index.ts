@@ -19,7 +19,7 @@ export * as entities from "./entities/index"
 
 export type TIntegration = {
   name: "motus/orama"
-  version: "0.0.1"
+  version: "0.2.0"
   user: { "tags": {}, "creation": { "enabled": false, "requiredTags": [] } }
   configuration: configuration.Configuration
   configurations: configurations.Configurations
