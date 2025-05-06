@@ -18,7 +18,7 @@ export * as states from "./states/index"
 export * as entities from "./entities/index"
 
 export type TIntegration = {
-  name: "motus/orama"
+  name: "orama"
   version: "0.2.0"
   user: { "tags": {}, "creation": { "enabled": false, "requiredTags": [] } }
   configuration: configuration.Configuration

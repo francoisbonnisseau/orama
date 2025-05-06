@@ -1,6 +1,6 @@
 {
   "name": "@bp-templates/empty-integration",
-  "integrationName": "motus/orama",
+  "integrationName": "orama",
   "scripts": {
     "check:type": "tsc --noEmit",
     "version": "bp --version",
